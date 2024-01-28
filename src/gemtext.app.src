@@ -1,0 +1,16 @@
+{application, gemtext,
+ [{description, "Gemini text parser"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib,
+    eunit
+   ]},
+  {env,[]},
+  {modules, [
+             gemtext
+            ]},
+  {licenses, ["Apache 2.0"]},
+  {links, []}
+ ]}.
