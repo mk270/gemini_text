@@ -12,10 +12,10 @@
 
 % todo:
 %   preformatting
-%   eject
 %   docs
 %   tests for the other bits
 %   specs
+%   multiple blank lines
 
 -export([parse/1, links/1, urls/1]).
 
@@ -42,7 +42,30 @@ parse(Text) when is_list(Text) ->
     Lines = string:tokens(Text, "\r\n"),
     Unformatted = unformat(Lines),
     Tagged = [tag(Line) || Line <- Unformatted],
-    lists:reverse(Tagged).
+    RevTagged = lists:reverse(Tagged),
+    gather_preformatted(RevTagged).
+
+
+gather_preformatted(Lines) ->
+    gather_preformatted(Lines, [], []).
+
+
+gather_preformatted([], Acc, []) ->
+    lists:reverse(Acc);
+
+gather_preformatted([], Acc, PrefAcc) ->
+    P = {preformatted, lists:reverse(PrefAcc)},
+    lists:reverse([P|Acc]);
+
+gather_preformatted([{preformatted_line, PL}|Tail], Acc, PrefAcc) ->
+    gather_preformatted(Tail, Acc, [PL|PrefAcc]);
+
+gather_preformatted([Head|Tail], Acc, []) ->
+    gather_preformatted(Tail, [Head|Acc], []);
+
+gather_preformatted([Head|Tail], Acc, PrefAcc) ->
+    P = {preformatted, lists:reverse(PrefAcc)},
+    gather_preformatted(Tail, [Head|[P|Acc]], []).
 
 
 -spec unformat(Lines :: [string()]) -> [{string(), boolean()}].
