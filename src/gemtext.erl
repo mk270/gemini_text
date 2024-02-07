@@ -19,7 +19,7 @@
 
 -export([parse/1, links/1, urls/1]).
 
--type simple_tag()  :: h1 | h2 | h3 | para | preformatted.
+-type simple_tag()  :: h1 | h2 | h3 | para | preformatted_line.
 -type simple_line() :: {simple_tag(), string()}.
 -type tag()         :: simple_tag() | link.
 -type link_line()   :: {link, string(), string()}.
@@ -75,7 +75,7 @@ pref_marker(Line) ->
 
 -spec tag({string(), boolean()}) ->
           tagged_line().
-tag({Line, true}) -> {preformatted, Line};
+tag({Line, true}) -> {preformatted_line, Line};
 tag({Line, false}) ->
     Matcher = [
                {"=> ", link},
