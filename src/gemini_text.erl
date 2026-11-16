@@ -7,7 +7,7 @@
 %%% Created : 23 Dec 2023 by Martin Keegan <mk270@stove>
 %%%-------------------------------------------------------------------
 
--module(gemtext).
+-module(gemini_text).
 -include_lib("eunit/include/eunit.hrl").
 
 % todo:
