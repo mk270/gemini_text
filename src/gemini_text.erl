@@ -63,9 +63,18 @@ parse(Text) when is_list(Text) ->
     gather_preformatted(RevTagged).
 
 
+-spec gather_preformatted(Lines) -> Result
+              when Lines  :: [tagged_line()],
+                   Result :: [tagged_line() | {preformatted, [string()]}].
 gather_preformatted(Lines) ->
     gather_preformatted(Lines, [], []).
 
+
+-spec gather_preformatted(Lines, Acc, PrefAcc) -> Result
+              when Lines   :: [tagged_line()],
+                   Acc     :: [tagged_line() | {preformatted, [string()]}],
+                   PrefAcc :: [string()],
+                   Result  :: [tagged_line() | {preformatted, [string()]}].
 
 gather_preformatted([], Acc, []) ->
     lists:reverse(Acc);
