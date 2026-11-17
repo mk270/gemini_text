@@ -7,6 +7,17 @@
 %%% Created : 23 Dec 2023 by Martin Keegan <mk270@stove>
 %%%-------------------------------------------------------------------
 
+% transitional from v1.0.0 to v2.0.0:
+%
+% the only call we need to support is:
+%
+%   urls/1:
+%
+%   -spec urls(Body) -> Result
+%           when Body   :: string(),
+%                Result :: [string()].
+%
+
 -module(gemini_text).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -26,18 +37,24 @@
 -type tagged_line() :: simple_line() | link_line().
 
 
--spec urls(Text :: string()) -> [string()].
-urls(Text) ->
+-spec urls(Text) -> Result
+              when Text   :: string(),
+                   Result :: [string()].
+urls(Text) when is_list(Text) ->
     [URL || {link, URL, _} <- links(Text)].
 
 
--spec links(Text :: string()) -> [link_line()].
+-spec links(Text) -> Result
+              when Text   :: string(),
+                   Result :: [link_line()].
 links(Text) when is_list(Text) ->
     Elts = parse(Text),
     [L || L = {link, _, _} <- Elts].         
 
 
--spec parse(Text :: string()) -> [tagged_line()].
+-spec parse(Text) -> Result
+              when Text   :: string(),
+                   Result :: [tagged_line()].
 parse(Text) when is_list(Text) ->
     Lines = string:tokens(Text, "\r\n"),
     Unformatted = unformat(Lines),
