@@ -36,7 +36,7 @@
 -type link_line()   :: {link, string(), string()}.
 -type tagged_line() :: simple_line() | link_line().
 
-
+-doc "Extract all the URLs in the links in the given Gemini page.".
 -spec urls(Text) -> Result
               when Text   :: string(),
                    Result :: [string()].
