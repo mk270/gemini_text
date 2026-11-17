@@ -219,7 +219,7 @@ tag3(Line, link) ->
     {URL, Caption} = split_once(URLandCaption),
     {link, URL, Caption};
 tag3(Line, link_no_space) ->
-    % hackily remove first two chars, known to be ">="
+    % remove the leading "=>", which tag2/2 has already matched
     <<$=, $>, RestOfLine/binary>> = Line,
     {URL, Caption} = split_once(RestOfLine),
     {link, URL, Caption};
