@@ -15,7 +15,7 @@
 %
 %   -spec urls(Body) -> Result
 %           when Body   :: string(),
-%                Result :: [string()].
+%                Result :: {ok, [string()]} | {error, term()}.
 %
 
 -module(gemini_text).
@@ -39,28 +39,33 @@
 -doc "Extract all the URLs in the links in the given Gemini page.".
 -spec urls(Text) -> Result
               when Text   :: string(),
-                   Result :: [string()].
+                   Result :: {ok, [string()]} | {error, term()}.
 urls(Text) when is_list(Text) ->
-    [URL || {link, URL, _} <- links(Text)].
+    case links(Text) of
+        {ok, Links} -> {ok, [URL || {link, URL, _} <- Links]};
+        {error, _} = Error -> Error
+    end.
 
 
 -spec links(Text) -> Result
               when Text   :: string(),
-                   Result :: [link_line()].
+                   Result :: {ok, [link_line()]} | {error, term()}.
 links(Text) when is_list(Text) ->
-    Elts = parse(Text),
-    [L || L = {link, _, _} <- Elts].         
+    case parse(Text) of
+        {ok, Elts} -> {ok, [L || L = {link, _, _} <- Elts]};
+        {error, _} = Error -> Error
+    end.
 
 
 -spec parse(Text) -> Result
               when Text   :: string(),
-                   Result :: [tagged_line()].
+                   Result :: {ok, [tagged_line()]} | {error, term()}.
 parse(Text) when is_list(Text) ->
     Lines = string:tokens(Text, "\r\n"),
     Unformatted = unformat(Lines),
     Tagged = [tag(Line) || Line <- Unformatted],
     RevTagged = lists:reverse(Tagged),
-    gather_preformatted(RevTagged).
+    {ok, gather_preformatted(RevTagged)}.
 
 
 -spec gather_preformatted(Lines) -> Result
@@ -220,4 +225,8 @@ parser_test_() ->
               "=>foo baq baqz\r\n"}
 
             ],
-    [?_assertEqual(Expected, parse(Input)) || {Expected, Input} <- Tests].
+    [?_assertEqual({ok, Expected}, parse(Input))
+     || {Expected, Input} <- Tests].
+
+urls_test_() ->
+    [?_assertEqual({ok, ["foo"]}, urls("=> foo bar\r\n"))].
