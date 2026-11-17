@@ -1,11 +1,10 @@
 {application, gemini_text,
  [{description, "Gemini text parser"},
-  {vsn, "2.1.0"},
+  {vsn, "2.1.1"},
   {registered, []},
   {applications,
    [kernel,
-    stdlib,
-    eunit
+    stdlib
    ]},
   {env,[]},
   {modules, [

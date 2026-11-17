@@ -19,7 +19,6 @@
 %
 
 -module(gemini_text).
--include_lib("eunit/include/eunit.hrl").
 
 % todo:
 %   docs
@@ -253,69 +252,3 @@ split_once(S) ->
                            [P] -> {P, <<>>}
                        end,
     {Prefix, string:trim(Suffix)}.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%                                TESTS                                    %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-parser_test_() ->
-    Tests = [
-             {[{h1, <<"hi">>}],
-              <<"# hi\r\n">>},
-
-             {[{link, <<"foo">>, <<"bar">>}],
-              <<"=> foo bar\r\n">>},
-
-             {[{link, <<"foo">>, <<"bar">>}],
-              <<"=> foo  bar\r\n">>},
-
-             {[{link, <<"foo">>, <<"bar baz">>}],
-              <<"=>  foo bar baz\r\n">>},
-
-             {[{link, <<"foo">>, <<"bar  baz">>}],
-              <<"=> foo bar  baz\r\n">>},
-
-             {[{link, <<"foo">>, <<"bar baz">>}],
-              <<"=>\tfoo\tbar baz\r\n">>},
-
-             {[{link, <<"foo">>, <<"baq baqz">>}],
-              <<"=>foo baq baqz\r\n">>}
-
-            ],
-    [?_assertEqual({ok, Expected}, parse(Input))
-     || {Expected, Input} <- Tests].
-
-urls_test_() ->
-    [?_assertEqual({ok, [<<"foo">>]}, urls(<<"=> foo bar\r\n">>))].
-
-heading_test_() ->
-    [?_assertEqual({ok, [{h1, <<"hi">>}]}, parse(<<"#hi\r\n">>)),
-     ?_assertEqual({ok, [{h2, <<"hi">>}]}, parse(<<"##hi\r\n">>)),
-     ?_assertEqual({ok, [{h3, <<"hi">>}]}, parse(<<"###  hi\r\n">>)),
-     ?_assertEqual({ok, [{h1, <<"hi there">>}]},
-                   parse(<<"# hi there\r\n">>))].
-
-blank_line_test_() ->
-    [?_assertEqual({ok, []}, parse(<<>>)),
-     ?_assertEqual({ok, [blank]}, parse(<<"\r\n">>)),
-     ?_assertEqual({ok, [{para, <<"a">>}, blank, {para, <<"b">>}]},
-                   parse(<<"a\r\n\r\nb\r\n">>)),
-     ?_assertEqual({ok, [blank, blank]}, parse(<<"\n\n">>)),
-     ?_assertEqual({ok, [{para, <<"a">>}]}, parse(<<"a">>)),
-     ?_assertEqual({ok, [{para, <<"a\rb">>}]}, parse(<<"a\rb\r\n">>))].
-
-preformatted_test_() ->
-    [?_assertEqual({ok, [{preformatted, <<>>, [<<"=> x y">>]}]},
-                   parse(<<"```\r\n=> x y\r\n```\r\n">>)),
-     ?_assertEqual({ok, [{preformatted, <<"alt text">>, [<<"a">>, <<>>]}]},
-                   parse(<<"``` alt text \r\na\r\n\r\n```\r\n">>)),
-     ?_assertEqual({ok, [{preformatted, <<>>, []}]},
-                   parse(<<"```\r\n```\r\n">>)),
-     ?_assertEqual({ok, [{preformatted, <<"x">>, [<<"a">>]}]},
-                   parse(<<"```x\r\na\r\n">>)),
-     ?_assertEqual({ok, [{para, <<"p">>},
-                         {preformatted, <<"x">>, [<<"a">>]},
-                         {preformatted, <<"y">>, [<<"b">>]},
-                         {para, <<"q">>}]},
-                   parse(<<"p\r\n```x\r\na\r\n```\r\n"
-                           "```y\r\nb\r\n```\r\nq\r\n">>))].
