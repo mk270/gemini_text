@@ -14,8 +14,8 @@
 %   urls/1:
 %
 %   -spec urls(Body) -> Result
-%           when Body   :: string(),
-%                Result :: {ok, [string()]} | {error, term()}.
+%           when Body   :: binary(),
+%                Result :: {ok, [binary()]} | {error, term()}.
 %
 
 -module(gemini_text).
@@ -31,37 +31,33 @@
 -export([parse/1, links/1, urls/1]).
 
 -type simple_tag()  :: h1 | h2 | h3 | para | preformatted_line.
--type simple_line() :: {simple_tag(), string()}.
+-type simple_line() :: {simple_tag(), binary()}.
 -type tag()         :: simple_tag() | link.
--type link_line()   :: {link, string(), string()}.
+-type link_line()   :: {link, binary(), binary()}.
 -type tagged_line() :: simple_line() | link_line().
 
 -doc "Extract all the URLs in the links in the given Gemini page.".
 -spec urls(Text) -> Result
-              when Text   :: string(),
-                   Result :: {ok, [string()]} | {error, term()}.
-urls(Text) when is_list(Text) ->
-    case links(Text) of
-        {ok, Links} -> {ok, [URL || {link, URL, _} <- Links]};
-        {error, _} = Error -> Error
-    end.
+              when Text   :: binary(),
+                   Result :: {ok, [binary()]} | {error, term()}.
+urls(Text) when is_binary(Text) ->
+    {ok, Links} = links(Text),
+    {ok, [URL || {link, URL, _} <- Links]}.
 
 
 -spec links(Text) -> Result
-              when Text   :: string(),
+              when Text   :: binary(),
                    Result :: {ok, [link_line()]} | {error, term()}.
-links(Text) when is_list(Text) ->
-    case parse(Text) of
-        {ok, Elts} -> {ok, [L || L = {link, _, _} <- Elts]};
-        {error, _} = Error -> Error
-    end.
+links(Text) when is_binary(Text) ->
+    {ok, Elts} = parse(Text),
+    {ok, [L || L = {link, _, _} <- Elts]}.
 
 
 -spec parse(Text) -> Result
-              when Text   :: string(),
+              when Text   :: binary(),
                    Result :: {ok, [tagged_line()]} | {error, term()}.
-parse(Text) when is_list(Text) ->
-    Lines = string:tokens(Text, "\r\n"),
+parse(Text) when is_binary(Text) ->
+    Lines = binary:split(Text, [<<"\r">>, <<"\n">>], [global, trim_all]),
     Unformatted = unformat(Lines),
     Tagged = [tag(Line) || Line <- Unformatted],
     RevTagged = lists:reverse(Tagged),
@@ -70,16 +66,16 @@ parse(Text) when is_list(Text) ->
 
 -spec gather_preformatted(Lines) -> Result
               when Lines  :: [tagged_line()],
-                   Result :: [tagged_line() | {preformatted, [string()]}].
+                   Result :: [tagged_line() | {preformatted, [binary()]}].
 gather_preformatted(Lines) ->
     gather_preformatted(Lines, [], []).
 
 
 -spec gather_preformatted(Lines, Acc, PrefAcc) -> Result
               when Lines   :: [tagged_line()],
-                   Acc     :: [tagged_line() | {preformatted, [string()]}],
-                   PrefAcc :: [string()],
-                   Result  :: [tagged_line() | {preformatted, [string()]}].
+                   Acc     :: [tagged_line() | {preformatted, [binary()]}],
+                   PrefAcc :: [binary()],
+                   Result  :: [tagged_line() | {preformatted, [binary()]}].
 
 gather_preformatted([], Acc, []) ->
     lists:reverse(Acc);
@@ -100,18 +96,18 @@ gather_preformatted([Head|Tail], Acc, PrefAcc) ->
 
 
 -spec unformat(Lines) -> Result
-              when Lines  :: [string()],
-                   Result :: [{string(), boolean()}].
+              when Lines  :: [binary()],
+                   Result :: [{binary(), boolean()}].
 unformat(Lines) ->
     unformat(Lines, [], false).
 
 
 % this (or something else) should collate the preformatted lines
 -spec unformat(Head, Acc, Preformatted) -> Result
-              when Head         :: [string()],
-                   Acc          :: [{string(), boolean()}],
+              when Head         :: [binary()],
+                   Acc          :: [{binary(), boolean()}],
                    Preformatted :: boolean(),
-                   Result       :: [{string(), boolean()}].
+                   Result       :: [{binary(), boolean()}].
 
 unformat([], Acc, _) ->
     Acc;
@@ -125,45 +121,45 @@ unformat([H|T], Acc, Preformatted) ->
 
 % is this line one that begins/ends a preformatted block?
 -spec pref_marker(Line) -> Result
-              when Line   :: string(),
+              when Line   :: binary(),
                    Result :: boolean().
 pref_marker(Line) ->
-    lists:prefix("```", Line).
+    prefix(<<"```">>, Line).
 
 
 -spec tag(Arg) -> Result
-              when Arg    :: {string(), boolean()},
+              when Arg    :: {binary(), boolean()},
                    Result :: tagged_line().
 tag({Line, true}) -> {preformatted_line, Line};
 tag({Line, false}) ->
     Matcher = [
-               {"=> ", link},
-               {"=>\t", link},
-               {"=>", link_no_space},
-               {"###", h3},
-               {"##", h2},
-               {"#", h1},
-               {"", para}
+               {<<"=> ">>, link},
+               {<<"=>\t">>, link},
+               {<<"=>">>, link_no_space},
+               {<<"###">>, h3},
+               {<<"##">>, h2},
+               {<<"#">>, h1},
+               {<<>>, para}
               ],
     tag2(Line, Matcher).
 
 
 -spec tag2(Line, Matcher) -> Result
-              when Line    :: string(),
-                   Matcher :: [{string(), tag() | link_no_space}],
+              when Line    :: binary(),
+                   Matcher :: [{binary(), tag() | link_no_space}],
                    Result  :: tagged_line().
 
 tag2(Line, []) ->
-    {para, Line}; % shouldn't hit here, due to the {"", para} guard
+    {para, Line}; % shouldn't hit here, due to the {<<>>, para} guard
 tag2(Line, [{Prefix, Tag}|T]) ->
-    case lists:prefix(Prefix, Line) of
+    case prefix(Prefix, Line) of
         true -> tag3(Line, Tag);
         false -> tag2(Line, T)
     end.
 
 
 -spec tag3(Line, Tag) -> Result
-              when Line   :: string(),
+              when Line   :: binary(),
                    Tag    :: tag() | link_no_space,
                    Result :: tagged_line().
 
@@ -173,7 +169,7 @@ tag3(Line, link) ->
     {link, URL, Caption};
 tag3(Line, link_no_space) ->
     % hackily remove first two chars, known to be ">="
-    [$=|[$>|RestOfLine]] = Line,
+    <<$=, $>, RestOfLine/binary>> = Line,
     {URL, Caption} = split_once(RestOfLine),
     {link, URL, Caption};
 tag3(Line, para) ->
@@ -183,18 +179,23 @@ tag3(Line, Tag) ->
     {Tag, Caption}.
 
 
+-spec prefix(Prefix, Line) -> Result
+              when Prefix :: binary(),
+                   Line   :: binary(),
+                   Result :: boolean().
+prefix(Prefix, Line) ->
+    binary:longest_common_prefix([Prefix, Line]) =:= byte_size(Prefix).
+
+
 % split string on first space
 -spec split_once(S) -> Result
-              when S      :: string(),
-                   Result :: {string(), string()}.
+              when S      :: binary(),
+                   Result :: {binary(), binary()}.
 split_once(S) ->
-    {Prefix, Suffix} = lists:splitwith(
-                         fun(X) -> case X of
-                                       $   -> false;
-                                       $\t -> false;
-                                       _ -> true
-                                   end
-                         end, S),
+    {Prefix, Suffix} = case binary:split(S, [<<" ">>, <<"\t">>]) of
+                           [P, Rest] -> {P, Rest};
+                           [P] -> {P, <<>>}
+                       end,
     {Prefix, string:trim(Suffix)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -203,30 +204,30 @@ split_once(S) ->
 
 parser_test_() ->
     Tests = [
-             {[{h1, "hi"}],
-              "# hi\r\n"},
+             {[{h1, <<"hi">>}],
+              <<"# hi\r\n">>},
 
-             {[{link, "foo", "bar"}],
-              "=> foo bar\r\n"},
+             {[{link, <<"foo">>, <<"bar">>}],
+              <<"=> foo bar\r\n">>},
 
-             {[{link, "foo", "bar"}],
-              "=> foo  bar\r\n"},
+             {[{link, <<"foo">>, <<"bar">>}],
+              <<"=> foo  bar\r\n">>},
 
-             {[{link, "foo", "bar baz"}],
-              "=>  foo bar baz\r\n"},
+             {[{link, <<"foo">>, <<"bar baz">>}],
+              <<"=>  foo bar baz\r\n">>},
 
-             {[{link, "foo", "bar  baz"}],
-              "=> foo bar  baz\r\n"},
+             {[{link, <<"foo">>, <<"bar  baz">>}],
+              <<"=> foo bar  baz\r\n">>},
 
-             {[{link, "foo", "bar baz"}],
-              "=>\tfoo\tbar baz\r\n"},
+             {[{link, <<"foo">>, <<"bar baz">>}],
+              <<"=>\tfoo\tbar baz\r\n">>},
 
-             {[{link, "foo", "baq baqz"}],
-              "=>foo baq baqz\r\n"}
+             {[{link, <<"foo">>, <<"baq baqz">>}],
+              <<"=>foo baq baqz\r\n">>}
 
             ],
     [?_assertEqual({ok, Expected}, parse(Input))
      || {Expected, Input} <- Tests].
 
 urls_test_() ->
-    [?_assertEqual({ok, ["foo"]}, urls("=> foo bar\r\n"))].
+    [?_assertEqual({ok, [<<"foo">>]}, urls(<<"=> foo bar\r\n">>))].
