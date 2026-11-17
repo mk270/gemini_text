@@ -85,7 +85,9 @@ gather_preformatted([Head|Tail], Acc, PrefAcc) ->
     gather_preformatted(Tail, [Head|[P|Acc]], []).
 
 
--spec unformat(Lines :: [string()]) -> [{string(), boolean()}].
+-spec unformat(Lines) -> Result
+              when Lines  :: [string()],
+                   Result :: [{string(), boolean()}].
 unformat(Lines) ->
     unformat(Lines, [], false).
 
@@ -108,13 +110,16 @@ unformat([H|T], Acc, Preformatted) ->
 
 
 % is this line one that begins/ends a preformatted block?
--spec pref_marker(Line :: string()) -> boolean().
+-spec pref_marker(Line) -> Result
+              when Line   :: string(),
+                   Result :: boolean().
 pref_marker(Line) ->
     lists:prefix("```", Line).
 
 
--spec tag({string(), boolean()}) ->
-          tagged_line().
+-spec tag(Arg) -> Result
+              when Arg    :: {string(), boolean()},
+                   Result :: tagged_line().
 tag({Line, true}) -> {preformatted_line, Line};
 tag({Line, false}) ->
     Matcher = [
