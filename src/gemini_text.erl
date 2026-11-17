@@ -200,8 +200,6 @@ tag({Line, false}) ->
                    Matcher :: [{binary(), tag() | link_no_space}],
                    Result  :: tagged_line().
 
-tag2(Line, []) ->
-    {para, Line}; % shouldn't hit here, due to the {<<>>, para} guard
 tag2(Line, [{Prefix, Tag}|T]) ->
     case prefix(Prefix, Line) of
         true -> tag3(Line, Tag);
