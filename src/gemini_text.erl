@@ -34,7 +34,9 @@
 -type simple_line() :: {simple_tag(), binary()}.
 -type tag()         :: simple_tag() | link.
 -type link_line()   :: {link, binary(), binary()}.
--type tagged_line() :: simple_line() | link_line().
+-type pref_block()  :: {preformatted, binary(), [binary()]}.
+-type fence_line()  :: {preformatted_start, binary()}.
+-type tagged_line() :: simple_line() | link_line() | pref_block() | blank.
 
 -doc "Extract all the URLs in the links in the given Gemini page.".
 -spec urls(Text) -> Result
@@ -57,47 +59,84 @@ links(Text) when is_binary(Text) ->
               when Text   :: binary(),
                    Result :: {ok, [tagged_line()]} | {error, term()}.
 parse(Text) when is_binary(Text) ->
-    Lines = binary:split(Text, [<<"\r">>, <<"\n">>], [global, trim_all]),
+    Lines = split_lines(Text),
     Unformatted = unformat(Lines),
     Tagged = [tag(Line) || Line <- Unformatted],
     RevTagged = lists:reverse(Tagged),
     {ok, gather_preformatted(RevTagged)}.
 
 
+% lines end in LF or CRLF; blank lines are kept
+-spec split_lines(Text) -> Result
+              when Text   :: binary(),
+                   Result :: [binary()].
+split_lines(Text) ->
+    Lines = binary:split(Text, <<"\n">>, [global]),
+    Lines1 = case lists:reverse(Lines) of
+                 [<<>>|Rev] -> lists:reverse(Rev);
+                 _ -> Lines
+             end,
+    [strip_cr(L) || L <- Lines1].
+
+
+-spec strip_cr(Line) -> Result
+              when Line   :: binary(),
+                   Result :: binary().
+strip_cr(<<>>) ->
+    <<>>;
+strip_cr(Line) ->
+    Size = byte_size(Line) - 1,
+    case Line of
+        <<Init:Size/binary, $\r>> -> Init;
+        _ -> Line
+    end.
+
+
 -spec gather_preformatted(Lines) -> Result
-              when Lines  :: [tagged_line()],
-                   Result :: [tagged_line() | {preformatted, [binary()]}].
+              when Lines  :: [tagged_line() | fence_line()],
+                   Result :: [tagged_line()].
 gather_preformatted(Lines) ->
-    gather_preformatted(Lines, [], []).
+    gather_preformatted(Lines, [], none).
 
 
--spec gather_preformatted(Lines, Acc, PrefAcc) -> Result
-              when Lines   :: [tagged_line()],
-                   Acc     :: [tagged_line() | {preformatted, [binary()]}],
-                   PrefAcc :: [binary()],
-                   Result  :: [tagged_line() | {preformatted, [binary()]}].
+-spec gather_preformatted(Lines, Acc, Pref) -> Result
+              when Lines  :: [tagged_line() | fence_line()],
+                   Acc    :: [tagged_line()],
+                   Pref   :: none | {binary(), [binary()]},
+                   Result :: [tagged_line()].
 
-gather_preformatted([], Acc, []) ->
+gather_preformatted([], Acc, none) ->
     lists:reverse(Acc);
 
-gather_preformatted([], Acc, PrefAcc) ->
-    P = {preformatted, lists:reverse(PrefAcc)},
-    lists:reverse([P|Acc]);
+gather_preformatted([], Acc, Pref) ->
+    lists:reverse([pref_block(Pref)|Acc]);
 
-gather_preformatted([{preformatted_line, PL}|Tail], Acc, PrefAcc) ->
-    gather_preformatted(Tail, Acc, [PL|PrefAcc]);
+gather_preformatted([{preformatted_start, Alt}|Tail], Acc, none) ->
+    gather_preformatted(Tail, Acc, {Alt, []});
 
-gather_preformatted([Head|Tail], Acc, []) ->
-    gather_preformatted(Tail, [Head|Acc], []);
+gather_preformatted([{preformatted_start, Alt}|Tail], Acc, Pref) ->
+    gather_preformatted(Tail, [pref_block(Pref)|Acc], {Alt, []});
 
-gather_preformatted([Head|Tail], Acc, PrefAcc) ->
-    P = {preformatted, lists:reverse(PrefAcc)},
-    gather_preformatted(Tail, [Head|[P|Acc]], []).
+gather_preformatted([{preformatted_line, PL}|Tail], Acc, {Alt, PrefAcc}) ->
+    gather_preformatted(Tail, Acc, {Alt, [PL|PrefAcc]});
+
+gather_preformatted([Head|Tail], Acc, none) ->
+    gather_preformatted(Tail, [Head|Acc], none);
+
+gather_preformatted([Head|Tail], Acc, Pref) ->
+    gather_preformatted(Tail, [Head|[pref_block(Pref)|Acc]], none).
+
+
+-spec pref_block(Pref) -> Result
+              when Pref   :: {binary(), [binary()]},
+                   Result :: pref_block().
+pref_block({Alt, PrefAcc}) ->
+    {preformatted, Alt, lists:reverse(PrefAcc)}.
 
 
 -spec unformat(Lines) -> Result
               when Lines  :: [binary()],
-                   Result :: [{binary(), boolean()}].
+                   Result :: [{binary(), boolean() | fence}].
 unformat(Lines) ->
     unformat(Lines, [], false).
 
@@ -105,9 +144,9 @@ unformat(Lines) ->
 % this (or something else) should collate the preformatted lines
 -spec unformat(Head, Acc, Preformatted) -> Result
               when Head         :: [binary()],
-                   Acc          :: [{binary(), boolean()}],
+                   Acc          :: [{binary(), boolean() | fence}],
                    Preformatted :: boolean(),
-                   Result       :: [{binary(), boolean()}].
+                   Result       :: [{binary(), boolean() | fence}].
 
 unformat([], Acc, _) ->
     Acc;
@@ -115,7 +154,7 @@ unformat([H|T], Acc, Preformatted) ->
     case {pref_marker(H), Preformatted} of
         {false, _} -> unformat(T, [{H,Preformatted}|Acc], Preformatted);
         {true, true} -> unformat(T, Acc, false);
-        {true, false} -> unformat(T, Acc, true)
+        {true, false} -> unformat(T, [{alt_text(H),fence}|Acc], true)
     end.
 
 
@@ -127,10 +166,20 @@ pref_marker(Line) ->
     prefix(<<"```">>, Line).
 
 
+% the text after the ``` which opens a preformatted block
+-spec alt_text(Line) -> Result
+              when Line   :: binary(),
+                   Result :: binary().
+alt_text(<<"```", Rest/binary>>) ->
+    string:trim(Rest).
+
+
 -spec tag(Arg) -> Result
-              when Arg    :: {binary(), boolean()},
-                   Result :: tagged_line().
+              when Arg    :: {binary(), boolean() | fence},
+                   Result :: tagged_line() | fence_line().
 tag({Line, true}) -> {preformatted_line, Line};
+tag({Alt, fence}) -> {preformatted_start, Alt};
+tag({<<>>, false}) -> blank;
 tag({Line, false}) ->
     Matcher = [
                {<<"=> ">>, link},
@@ -175,8 +224,17 @@ tag3(Line, link_no_space) ->
 tag3(Line, para) ->
     {para, Line};
 tag3(Line, Tag) ->
-    {_Tag, Caption} = split_once(Line),
-    {Tag, Caption}.
+    N = heading_level(Tag),
+    <<_:N/binary, Caption/binary>> = Line,
+    {Tag, string:trim(Caption)}.
+
+
+-spec heading_level(Tag) -> Result
+              when Tag    :: h1 | h2 | h3,
+                   Result :: 1..3.
+heading_level(h1) -> 1;
+heading_level(h2) -> 2;
+heading_level(h3) -> 3.
 
 
 -spec prefix(Prefix, Line) -> Result
@@ -231,3 +289,35 @@ parser_test_() ->
 
 urls_test_() ->
     [?_assertEqual({ok, [<<"foo">>]}, urls(<<"=> foo bar\r\n">>))].
+
+heading_test_() ->
+    [?_assertEqual({ok, [{h1, <<"hi">>}]}, parse(<<"#hi\r\n">>)),
+     ?_assertEqual({ok, [{h2, <<"hi">>}]}, parse(<<"##hi\r\n">>)),
+     ?_assertEqual({ok, [{h3, <<"hi">>}]}, parse(<<"###  hi\r\n">>)),
+     ?_assertEqual({ok, [{h1, <<"hi there">>}]},
+                   parse(<<"# hi there\r\n">>))].
+
+blank_line_test_() ->
+    [?_assertEqual({ok, []}, parse(<<>>)),
+     ?_assertEqual({ok, [blank]}, parse(<<"\r\n">>)),
+     ?_assertEqual({ok, [{para, <<"a">>}, blank, {para, <<"b">>}]},
+                   parse(<<"a\r\n\r\nb\r\n">>)),
+     ?_assertEqual({ok, [blank, blank]}, parse(<<"\n\n">>)),
+     ?_assertEqual({ok, [{para, <<"a">>}]}, parse(<<"a">>)),
+     ?_assertEqual({ok, [{para, <<"a\rb">>}]}, parse(<<"a\rb\r\n">>))].
+
+preformatted_test_() ->
+    [?_assertEqual({ok, [{preformatted, <<>>, [<<"=> x y">>]}]},
+                   parse(<<"```\r\n=> x y\r\n```\r\n">>)),
+     ?_assertEqual({ok, [{preformatted, <<"alt text">>, [<<"a">>, <<>>]}]},
+                   parse(<<"``` alt text \r\na\r\n\r\n```\r\n">>)),
+     ?_assertEqual({ok, [{preformatted, <<>>, []}]},
+                   parse(<<"```\r\n```\r\n">>)),
+     ?_assertEqual({ok, [{preformatted, <<"x">>, [<<"a">>]}]},
+                   parse(<<"```x\r\na\r\n">>)),
+     ?_assertEqual({ok, [{para, <<"p">>},
+                         {preformatted, <<"x">>, [<<"a">>]},
+                         {preformatted, <<"y">>, [<<"b">>]},
+                         {para, <<"q">>}]},
+                   parse(<<"p\r\n```x\r\na\r\n```\r\n"
+                           "```y\r\nb\r\n```\r\nq\r\n">>))].
