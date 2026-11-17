@@ -30,12 +30,14 @@
 
 -export([parse/1, links/1, urls/1]).
 
--type simple_tag()  :: h1 | h2 | h3 | para | preformatted_line.
+-type simple_tag()  :: h1 | h2 | h3 | para.
 -type simple_line() :: {simple_tag(), binary()}.
 -type tag()         :: simple_tag() | link.
 -type link_line()   :: {link, binary(), binary()}.
 -type pref_block()  :: {preformatted, binary(), [binary()]}.
+-type pref_line()   :: {preformatted_line, binary()}.
 -type fence_line()  :: {preformatted_start, binary()}.
+-type raw_line()    :: tagged_line() | pref_line() | fence_line().
 -type tagged_line() :: simple_line() | link_line() | pref_block() | blank.
 
 -doc "Extract all the URLs in the links in the given Gemini page.".
@@ -93,14 +95,14 @@ strip_cr(Line) ->
 
 
 -spec gather_preformatted(Lines) -> Result
-              when Lines  :: [tagged_line() | fence_line()],
+              when Lines  :: [raw_line()],
                    Result :: [tagged_line()].
 gather_preformatted(Lines) ->
     gather_preformatted(Lines, [], none).
 
 
 -spec gather_preformatted(Lines, Acc, Pref) -> Result
-              when Lines  :: [tagged_line() | fence_line()],
+              when Lines  :: [raw_line()],
                    Acc    :: [tagged_line()],
                    Pref   :: none | {binary(), [binary()]},
                    Result :: [tagged_line()].
@@ -176,7 +178,7 @@ alt_text(<<"```", Rest/binary>>) ->
 
 -spec tag(Arg) -> Result
               when Arg    :: {binary(), boolean() | fence},
-                   Result :: tagged_line() | fence_line().
+                   Result :: raw_line().
 tag({Line, true}) -> {preformatted_line, Line};
 tag({Alt, fence}) -> {preformatted_start, Alt};
 tag({<<>>, false}) -> blank;
