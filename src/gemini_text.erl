@@ -22,10 +22,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 % todo:
-%   preformatting
 %   docs
 %   tests for the other bits
-%   specs
 %   multiple blank lines
 
 -export([parse/1, links/1, urls/1]).
@@ -245,7 +243,7 @@ prefix(Prefix, Line) ->
     binary:longest_common_prefix([Prefix, Line]) =:= byte_size(Prefix).
 
 
-% split string on first space
+% split binary on first space or tab; trim the remainder
 -spec split_once(S) -> Result
               when S      :: binary(),
                    Result :: {binary(), binary()}.
