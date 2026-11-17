@@ -32,9 +32,8 @@
 -type tag()         :: simple_tag() | link.
 -type link_line()   :: {link, binary(), binary()}.
 -type pref_block()  :: {preformatted, binary(), [binary()]}.
--type pref_line()   :: {preformatted_line, binary()}.
--type fence_line()  :: {preformatted_start, binary()}.
--type raw_line()    :: tagged_line() | pref_line() | fence_line().
+-type pref_state()  :: none | {binary(), [binary()]}.
+-type state()       :: {[tagged_line()], pref_state()}.
 -type tagged_line() :: simple_line() | link_line() | pref_block() | blank.
 
 -doc "Extract all the URLs in the links in the given Gemini page.".
@@ -59,10 +58,33 @@ links(Text) when is_binary(Text) ->
                    Result :: {ok, [tagged_line()]} | {error, term()}.
 parse(Text) when is_binary(Text) ->
     Lines = split_lines(Text),
-    Unformatted = unformat(Lines),
-    Tagged = [tag(Line) || Line <- Unformatted],
-    RevTagged = lists:reverse(Tagged),
-    {ok, gather_preformatted(RevTagged)}.
+    {Acc, Pref} = lists:foldl(fun parse_line/2, {[], none}, Lines),
+    {ok, lists:reverse(finish_pref(Pref, Acc))}.
+
+
+% an unterminated preformatted block is still emitted
+-spec finish_pref(Pref, Acc) -> Result
+              when Pref   :: pref_state(),
+                   Acc    :: [tagged_line()],
+                   Result :: [tagged_line()].
+finish_pref(none, Acc) ->
+    Acc;
+finish_pref(Pref, Acc) ->
+    [pref_block(Pref)|Acc].
+
+
+% Acc is in reverse order; Pref is the preformatted block being built
+-spec parse_line(Line, State) -> Result
+              when Line   :: binary(),
+                   State  :: state(),
+                   Result :: state().
+parse_line(Line, {Acc, Pref}) ->
+    case {pref_marker(Line), Pref} of
+        {false, none} -> {[tag(Line)|Acc], none};
+        {false, {Alt, PrefAcc}} -> {Acc, {Alt, [Line|PrefAcc]}};
+        {true, none} -> {Acc, {alt_text(Line), []}};
+        {true, _} -> {[pref_block(Pref)|Acc], none}
+    end.
 
 
 % lines end in LF or CRLF; blank lines are kept
@@ -91,70 +113,11 @@ strip_cr(Line) ->
     end.
 
 
--spec gather_preformatted(Lines) -> Result
-              when Lines  :: [raw_line()],
-                   Result :: [tagged_line()].
-gather_preformatted(Lines) ->
-    gather_preformatted(Lines, [], none).
-
-
--spec gather_preformatted(Lines, Acc, Pref) -> Result
-              when Lines  :: [raw_line()],
-                   Acc    :: [tagged_line()],
-                   Pref   :: none | {binary(), [binary()]},
-                   Result :: [tagged_line()].
-
-gather_preformatted([], Acc, none) ->
-    lists:reverse(Acc);
-
-gather_preformatted([], Acc, Pref) ->
-    lists:reverse([pref_block(Pref)|Acc]);
-
-gather_preformatted([{preformatted_start, Alt}|Tail], Acc, none) ->
-    gather_preformatted(Tail, Acc, {Alt, []});
-
-gather_preformatted([{preformatted_start, Alt}|Tail], Acc, Pref) ->
-    gather_preformatted(Tail, [pref_block(Pref)|Acc], {Alt, []});
-
-gather_preformatted([{preformatted_line, PL}|Tail], Acc, {Alt, PrefAcc}) ->
-    gather_preformatted(Tail, Acc, {Alt, [PL|PrefAcc]});
-
-gather_preformatted([Head|Tail], Acc, none) ->
-    gather_preformatted(Tail, [Head|Acc], none);
-
-gather_preformatted([Head|Tail], Acc, Pref) ->
-    gather_preformatted(Tail, [Head|[pref_block(Pref)|Acc]], none).
-
-
 -spec pref_block(Pref) -> Result
               when Pref   :: {binary(), [binary()]},
                    Result :: pref_block().
 pref_block({Alt, PrefAcc}) ->
     {preformatted, Alt, lists:reverse(PrefAcc)}.
-
-
--spec unformat(Lines) -> Result
-              when Lines  :: [binary()],
-                   Result :: [{binary(), boolean() | fence}].
-unformat(Lines) ->
-    unformat(Lines, [], false).
-
-
-% this (or something else) should collate the preformatted lines
--spec unformat(Head, Acc, Preformatted) -> Result
-              when Head         :: [binary()],
-                   Acc          :: [{binary(), boolean() | fence}],
-                   Preformatted :: boolean(),
-                   Result       :: [{binary(), boolean() | fence}].
-
-unformat([], Acc, _) ->
-    Acc;
-unformat([H|T], Acc, Preformatted) ->
-    case {pref_marker(H), Preformatted} of
-        {false, _} -> unformat(T, [{H,Preformatted}|Acc], Preformatted);
-        {true, true} -> unformat(T, Acc, false);
-        {true, false} -> unformat(T, [{alt_text(H),fence}|Acc], true)
-    end.
 
 
 % is this line one that begins/ends a preformatted block?
@@ -174,12 +137,10 @@ alt_text(<<"```", Rest/binary>>) ->
 
 
 -spec tag(Arg) -> Result
-              when Arg    :: {binary(), boolean() | fence},
-                   Result :: raw_line().
-tag({Line, true}) -> {preformatted_line, Line};
-tag({Alt, fence}) -> {preformatted_start, Alt};
-tag({<<>>, false}) -> blank;
-tag({Line, false}) ->
+              when Arg    :: binary(),
+                   Result :: tagged_line().
+tag(<<>>) -> blank;
+tag(Line) ->
     Matcher = [
                {<<"=> ">>, link},
                {<<"=>\t">>, link},
