@@ -11,6 +11,6 @@
              gemini_text,
              gemini_text_line
             ]},
-  {licenses, ["Apache 2.0"]},
+  {licenses, ["Apache-2.0"]},
   {links, []}
  ]}.
