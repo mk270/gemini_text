@@ -1,5 +1,13 @@
 -module(gemini_text_line).
 
+-moduledoc """
+Classify a single line of Gemini text.
+
+This module is internal to `m:gemini_text`: it knows nothing about
+documents, line endings or preformatted state. Only `tag/1`,
+`pref_marker/1` and `alt_text/1` are public.
+""".
+
 -export([tag/1, pref_marker/1, alt_text/1]).
 % but export *everything* if running under eunit
 -ifdef(TEST).
@@ -12,10 +20,22 @@
 -type simple_tag()    :: h1 | h2 | h3 | para.
 -type simple_line()   :: {simple_tag(), binary()}.
 -type tag()           :: simple_tag() | link.
+-doc """
+A link: `{link, Url, Label}`. `Label` may be empty.
+""".
 -type link_line()     :: {link, binary(), binary()}.
+-doc """
+What `tag/1` returns: any element except a preformatted block, that is
+`{h1 | h2 | h3 | para, Text}`, `{link, Url, Label}` or `blank`.
+""".
 -type line_element()  :: simple_line() | link_line() | blank.
 
-% is this line one that begins/ends a preformatted block?
+-doc """
+Is the line a preformatted-block fence (does it start with three
+backticks)?
+
+True for both the opening and the closing fence.
+""".
 -spec pref_marker(Line) -> Result
               when Line   :: binary(),
                    Result :: boolean().
@@ -23,7 +43,12 @@ pref_marker(Line) ->
     prefix(<<"```">>, Line).
 
 
-% the text after the ``` which opens a preformatted block
+-doc """
+Return the alt text following the opening fence of a preformatted block,
+trimmed of surrounding whitespace.
+
+The line must start with three backticks.
+""".
 -spec alt_text(Line) -> Result
               when Line   :: binary(),
                    Result :: binary().
@@ -31,6 +56,17 @@ alt_text(<<"```", Rest/binary>>) ->
     string:trim(Rest).
 
 
+-doc """
+Classify a single line.
+
+Returns `blank`, `{h1 | h2 | h3 | para, Text}` or `{link, Url, Label}`.
+Heading captions and link labels are trimmed, and the space after `#` or
+`=>` is optional. A fourth `#` is part of an h3 caption. Leading
+whitespace is significant, so an indented `#` or `=>` line is a `para`.
+
+The preformatted state is not known here, so a fence line is returned as
+a `para`.
+""".
 -spec tag(Arg) -> Result
               when Arg    :: binary(),
                    Result :: line_element().

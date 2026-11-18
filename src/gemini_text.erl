@@ -1,27 +1,56 @@
 %%%-------------------------------------------------------------------
 %%% @author Martin Keegan <mk270@stove>
 %%% @copyright (C) 2023, Martin Keegan
-%%% @doc
-%%%
-%%% @end
 %%% Created : 23 Dec 2023 by Martin Keegan <mk270@stove>
 %%%-------------------------------------------------------------------
 
 -module(gemini_text).
 
-% todo:
-%   docs
+-moduledoc """
+Parse Gemini-formatted text.
+
+[`parse/1`](`parse/1`) takes a binary and returns a list of elements
+(see `t:tagged_line/0`) in document order, or `{error, invalid_utf8}` if
+the input is not valid UTF-8.
+
+[`links/1`](`links/1`) and [`urls/1`](`urls/1`) are helpers which
+extract just the links, or just their URLs.
+""".
+
+-author('martin@no.ucant.org').
 
 -export([parse/1, links/1, urls/1]).
 
+-export_type([tagged_line/0, pref_block/0]).
+
+-doc """
+A preformatted block: `{preformatted, Alt, Lines}`.
+
+`Alt` is the text after the opening fence, trimmed (it may be empty).
+`Lines` are the lines of the body, verbatim and without line endings.
+""".
 -type pref_block()  :: {preformatted, binary(), [binary()]}.
 -type pref_state()  :: none | {binary(), [binary()]}.
 -type state()       :: {[tagged_line()], pref_state()}.
+-doc """
+One element of a Gemini document. It is one of:
+
+- `{h1 | h2 | h3 | para, Text}`
+- `{link, Url, Label}`
+- `t:pref_block/0`
+- `blank`
+""".
 -type tagged_line() :: gemini_text_line:line_element() | pref_block().
 
 %%% API %%%
 
--doc "Extract all the URLs in the links in the given Gemini page.".
+-doc """
+Extract all the URLs in the links in the given Gemini page.
+
+URLs are returned as written, in document order, and are not resolved
+against any base. Links inside preformatted blocks are not extracted.
+The result is an error in the same cases as [`parse/1`](`parse/1`).
+""".
 -spec urls(Text) -> Result
               when Text   :: binary(),
                    Result :: {ok, [binary()]} | {error, term()}.
@@ -33,6 +62,13 @@ urls(Text) when is_binary(Text) ->
     end.
 
 
+-doc """
+Extract all the links in the given Gemini page.
+
+Each link is `{link, Url, Label}`, in document order. Links inside
+preformatted blocks are not extracted. The result is an error in the same
+cases as [`parse/1`](`parse/1`).
+""".
 -spec links(Text) -> Result
               when Text   :: binary(),
                    Result :: {ok, [gemini_text_line:link_line()]}
@@ -44,6 +80,14 @@ links(Text) when is_binary(Text) ->
     end.
 
 
+-doc """
+Parse `Text` as a Gemini document.
+
+Returns `{ok, Elements}` in document order (see `t:tagged_line/0`), or
+`{error, invalid_utf8}` if any line is not valid UTF-8. Lines end in LF
+or CRLF. Blank lines are kept, as `blank`. A preformatted block still
+open at the end of the input is returned as if it had been closed.
+""".
 -spec parse(Text) -> Result
               when Text   :: binary(),
                    Result :: {ok, [tagged_line()]} | {error, term()}.

@@ -1,6 +1,6 @@
 {application, gemini_text,
  [{description, "Gemini text parser"},
-  {vsn, "2.3.0"},
+  {vsn, "2.3.1"},
   {registered, []},
   {applications,
    [kernel,
