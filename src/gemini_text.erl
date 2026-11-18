@@ -14,14 +14,10 @@
 
 -export([parse/1, links/1, urls/1]).
 
--type simple_tag()  :: h1 | h2 | h3 | para.
--type simple_line() :: {simple_tag(), binary()}.
--type tag()         :: simple_tag() | link.
--type link_line()   :: {link, binary(), binary()}.
 -type pref_block()  :: {preformatted, binary(), [binary()]}.
 -type pref_state()  :: none | {binary(), [binary()]}.
 -type state()       :: {[tagged_line()], pref_state()}.
--type tagged_line() :: simple_line() | link_line() | pref_block() | blank.
+-type tagged_line() :: gemini_text_line:line_element() | pref_block().
 
 %%% API %%%
 
@@ -39,7 +35,8 @@ urls(Text) when is_binary(Text) ->
 
 -spec links(Text) -> Result
               when Text   :: binary(),
-                   Result :: {ok, [link_line()]} | {error, term()}.
+                   Result :: {ok, [gemini_text_line:link_line()]}
+                           | {error, term()}.
 links(Text) when is_binary(Text) ->
     case parse(Text) of
         {ok, Elts}         -> {ok, [L || L = {link, _, _} <- Elts]};
@@ -99,11 +96,15 @@ finish_pref(Pref, Acc) ->
                    State  :: state(),
                    Result :: state().
 parse_line(Line, {Acc, Pref}) ->
-    case {pref_marker(Line), Pref} of
-        {false, none}           -> {[tag(Line)|Acc], none};
-        {false, {Alt, PrefAcc}} -> {Acc, {Alt, [Line|PrefAcc]}};
-        {true, none}            -> {Acc, {alt_text(Line), []}};
-        {true, _}               -> {[pref_block(Pref)|Acc], none}
+    case {gemini_text_line:pref_marker(Line), Pref} of
+        {false, none} ->
+            {[gemini_text_line:tag(Line)|Acc], none};
+        {false, {Alt, PrefAcc}} ->
+            {Acc, {Alt, [Line|PrefAcc]}};
+        {true, none} ->
+            {Acc, {gemini_text_line:alt_text(Line), []}};
+        {true, _} ->
+            {[pref_block(Pref)|Acc], none}
     end.
 
 
@@ -138,98 +139,3 @@ strip_cr(Line) ->
                    Result :: pref_block().
 pref_block({Alt, PrefAcc}) ->
     {preformatted, Alt, lists:reverse(PrefAcc)}.
-
-
-% is this line one that begins/ends a preformatted block?
--spec pref_marker(Line) -> Result
-              when Line   :: binary(),
-                   Result :: boolean().
-pref_marker(Line) ->
-    prefix(<<"```">>, Line).
-
-
-% the text after the ``` which opens a preformatted block
--spec alt_text(Line) -> Result
-              when Line   :: binary(),
-                   Result :: binary().
-alt_text(<<"```", Rest/binary>>) ->
-    string:trim(Rest).
-
-
--spec tag(Arg) -> Result
-              when Arg    :: binary(),
-                   Result :: tagged_line().
-tag(<<>>) -> blank;
-tag(Line) ->
-    Matcher = [
-               {<<"=> ">>, link},
-               {<<"=>\t">>, link},
-               {<<"=>">>, link_no_space},
-               {<<"###">>, h3},
-               {<<"##">>, h2},
-               {<<"#">>, h1},
-               {<<>>, para}
-              ],
-    tag2(Line, Matcher).
-
-
--spec tag2(Line, Matcher) -> Result
-              when Line    :: binary(),
-                   Matcher :: [{binary(), tag() | link_no_space}],
-                   Result  :: tagged_line().
-
-tag2(Line, [{Prefix, Tag}|T]) ->
-    case prefix(Prefix, Line) of
-        true  -> tag3(Line, Tag);
-        false -> tag2(Line, T)
-    end.
-
-
--spec tag3(Line, Tag) -> Result
-              when Line   :: binary(),
-                   Tag    :: tag() | link_no_space,
-                   Result :: tagged_line().
-
-tag3(Line, link) ->
-    {_Tag, URLandCaption} = split_once(Line),
-    {URL, Caption} = split_once(URLandCaption),
-    {link, URL, Caption};
-tag3(Line, link_no_space) ->
-    % remove the leading "=>", which tag2/2 has already matched
-    <<$=, $>, RestOfLine/binary>> = Line,
-    {URL, Caption} = split_once(RestOfLine),
-    {link, URL, Caption};
-tag3(Line, para) ->
-    {para, Line};
-tag3(Line, Tag) ->
-    N = heading_level(Tag),
-    <<_:N/binary, Caption/binary>> = Line,
-    {Tag, string:trim(Caption)}.
-
-
--spec heading_level(Tag) -> Result
-              when Tag    :: h1 | h2 | h3,
-                   Result :: 1..3.
-heading_level(h1) -> 1;
-heading_level(h2) -> 2;
-heading_level(h3) -> 3.
-
-
--spec prefix(Prefix, Line) -> Result
-              when Prefix :: binary(),
-                   Line   :: binary(),
-                   Result :: boolean().
-prefix(Prefix, Line) ->
-    binary:longest_common_prefix([Prefix, Line]) =:= byte_size(Prefix).
-
-
-% split binary on first space or tab; trim the remainder
--spec split_once(S) -> Result
-              when S      :: binary(),
-                   Result :: {binary(), binary()}.
-split_once(S) ->
-    {Prefix, Suffix} = case binary:split(S, [<<" ">>, <<"\t">>]) of
-                           [P, Rest] -> {P, Rest};
-                           [P] -> {P, <<>>}
-                       end,
-    {Prefix, string:trim(Suffix)}.

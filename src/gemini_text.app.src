@@ -1,6 +1,6 @@
 {application, gemini_text,
  [{description, "Gemini text parser"},
-  {vsn, "2.2.0"},
+  {vsn, "2.3.0"},
   {registered, []},
   {applications,
    [kernel,
@@ -8,7 +8,8 @@
    ]},
   {env,[]},
   {modules, [
-             gemini_text
+             gemini_text,
+             gemini_text_line
             ]},
   {licenses, ["Apache 2.0"]},
   {links, []}
