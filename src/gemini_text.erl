@@ -1,7 +1,6 @@
 %%%-------------------------------------------------------------------
-%%% @author Martin Keegan <mk270@stove>
 %%% @copyright (C) 2023, Martin Keegan
-%%% Created : 23 Dec 2023 by Martin Keegan <mk270@stove>
+%%% Created : 23 Dec 2023
 %%%-------------------------------------------------------------------
 
 -module(gemini_text).
