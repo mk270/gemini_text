@@ -17,7 +17,7 @@ documents, line endings or preformatted state. Only `tag/1`,
 
 -export_type([line_element/0, link_line/0]).
 
--type simple_tag()    :: h1 | h2 | h3 | para.
+-type simple_tag()    :: h1 | h2 | h3 | para | list_item | quote.
 -type simple_line()   :: {simple_tag(), binary()}.
 -type tag()           :: simple_tag() | link.
 -doc """
@@ -26,7 +26,8 @@ A link: `{link, Url, Label}`. `Label` may be empty.
 -type link_line()     :: {link, binary(), binary()}.
 -doc """
 What `tag/1` returns: any element except a preformatted block, that is
-`{h1 | h2 | h3 | para, Text}`, `{link, Url, Label}` or `blank`.
+`{h1 | h2 | h3 | para | list_item | quote, Text}`, `{link, Url, Label}`
+or `blank`.
 """.
 -type line_element()  :: simple_line() | link_line() | blank.
 
@@ -45,7 +46,7 @@ pref_marker(Line) ->
 
 -doc """
 Return the alt text following the opening fence of a preformatted block,
-trimmed of surrounding whitespace.
+trimmed of spaces and tabs.
 
 The line must start with three backticks.
 """.
@@ -53,16 +54,23 @@ The line must start with three backticks.
               when Line   :: binary(),
                    Result :: binary().
 alt_text(<<"```", Rest/binary>>) ->
-    string:trim(Rest).
+    trim_ws(Rest).
 
 
 -doc """
 Classify a single line.
 
-Returns `blank`, `{h1 | h2 | h3 | para, Text}` or `{link, Url, Label}`.
-Heading captions and link labels are trimmed, and the space after `#` or
-`=>` is optional. A fourth `#` is part of an h3 caption. Leading
-whitespace is significant, so an indented `#` or `=>` line is a `para`.
+Returns `blank`, `{h1 | h2 | h3 | para | list_item | quote, Text}` or
+`{link, Url, Label}`.
+Heading captions and link labels are trimmed of spaces and tabs, and
+the space after `#` or `=>` is optional. A fourth `#` is part of an h3
+caption. Leading whitespace is significant, so an indented `#` or `=>`
+line is a `para`.
+
+A list item needs `* ` (with the space); its text is what follows,
+trimmed of spaces and tabs. A quote is `>` followed by its text, trimmed
+likewise, so one optional space after the `>` is dropped; a lone `>` is
+`{quote, <<>>}`. A lone `*` is a `para`.
 
 The preformatted state is not known here, so a fence line is returned as
 a `para`.
@@ -79,6 +87,8 @@ tag(Line) ->
                {<<"###">>, h3},
                {<<"##">>, h2},
                {<<"#">>, h1},
+               {<<"* ">>, list_item},
+               {<<">">>, quote},
                {<<>>, para}
               ],
     tag2(Line, Matcher).
@@ -112,10 +122,14 @@ tag3(Line, link_no_space) ->
     {link, URL, Caption};
 tag3(Line, para) ->
     {para, Line};
+tag3(<<"* ", Text/binary>>, list_item) ->
+    {list_item, trim_ws(Text)};
+tag3(<<">", Text/binary>>, quote) ->
+    {quote, trim_ws(Text)};
 tag3(Line, Tag) ->
     N = heading_level(Tag),
     <<_:N/binary, Caption/binary>> = Line,
-    {Tag, string:trim(Caption)}.
+    {Tag, trim_ws(Caption)}.
 
 
 -spec heading_level(Tag) -> Result
@@ -143,4 +157,13 @@ split_once(S) ->
                            [P, Rest] -> {P, Rest};
                            [P] -> {P, <<>>}
                        end,
-    {Prefix, string:trim(Suffix)}.
+    {Prefix, trim_ws(Suffix)}.
+
+
+% trim only spaces and tabs, as the spec says (string:trim/1 also strips
+% VT, FF, NEL, U+2028 and so on)
+-spec trim_ws(S) -> Result
+              when S      :: binary(),
+                   Result :: binary().
+trim_ws(S) ->
+    string:trim(S, both, [$\s, $\t]).

@@ -74,3 +74,37 @@ heading_level_test_() ->
     [?_assertEqual(1, gemini_text_line:heading_level(h1)),
      ?_assertEqual(2, gemini_text_line:heading_level(h2)),
      ?_assertEqual(3, gemini_text_line:heading_level(h3))].
+
+% only spaces and tabs are trimmed; other Unicode whitespace survives
+trim_ws_test_() ->
+    Ws = [<<"\v">>, <<"\f">>, <<"\xc2\x85">>, <<"\xe2\x80\xa8">>],
+    lists:append(
+      [[?_assertEqual({h1, <<W/binary, "a", W/binary>>},
+                      gemini_text_line:tag(<<"# \t", W/binary, "a",
+                                             W/binary, " \t">>)),
+        ?_assertEqual({link, <<"u">>, <<W/binary, "l", W/binary>>},
+                      gemini_text_line:tag(<<"=> u \t", W/binary, "l",
+                                             W/binary, " \t">>)),
+        ?_assertEqual(<<W/binary, "a", W/binary>>,
+                      gemini_text_line:alt_text(<<"``` \t", W/binary, "a",
+                                                  W/binary, " \t">>))]
+       || W <- Ws]).
+
+tag_list_item_test_() ->
+    [?_assertEqual({list_item, <<"a b">>}, gemini_text_line:tag(<<"* a b">>)),
+     ?_assertEqual({list_item, <<"a">>}, gemini_text_line:tag(<<"*  a \t">>)),
+     ?_assertEqual({list_item, <<>>}, gemini_text_line:tag(<<"* ">>)),
+     % the space is mandatory
+     ?_assertEqual({para, <<"*">>}, gemini_text_line:tag(<<"*">>)),
+     ?_assertEqual({para, <<"*a">>}, gemini_text_line:tag(<<"*a">>)),
+     ?_assertEqual({para, <<"*\ta">>}, gemini_text_line:tag(<<"*\ta">>)),
+     ?_assertEqual({para, <<" * a">>}, gemini_text_line:tag(<<" * a">>))].
+
+tag_quote_test_() ->
+    [?_assertEqual({quote, <<"a b">>}, gemini_text_line:tag(<<"> a b">>)),
+     ?_assertEqual({quote, <<"a">>}, gemini_text_line:tag(<<">a">>)),
+     ?_assertEqual({quote, <<"a">>}, gemini_text_line:tag(<<">  a \t">>)),
+     ?_assertEqual({quote, <<>>}, gemini_text_line:tag(<<">">>)),
+     ?_assertEqual({quote, <<>>}, gemini_text_line:tag(<<"> ">>)),
+     ?_assertEqual({quote, <<"> a">>}, gemini_text_line:tag(<<">> a">>)),
+     ?_assertEqual({para, <<" > a">>}, gemini_text_line:tag(<<" > a">>))].
