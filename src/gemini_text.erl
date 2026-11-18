@@ -41,16 +41,20 @@
               when Text   :: binary(),
                    Result :: {ok, [binary()]} | {error, term()}.
 urls(Text) when is_binary(Text) ->
-    {ok, Links} = links(Text),
-    {ok, [URL || {link, URL, _} <- Links]}.
+    case links(Text) of
+        {ok, Links} -> {ok, [URL || {link, URL, _} <- Links]};
+        {error, _} = Error -> Error
+    end.
 
 
 -spec links(Text) -> Result
               when Text   :: binary(),
                    Result :: {ok, [link_line()]} | {error, term()}.
 links(Text) when is_binary(Text) ->
-    {ok, Elts} = parse(Text),
-    {ok, [L || L = {link, _, _} <- Elts]}.
+    case parse(Text) of
+        {ok, Elts} -> {ok, [L || L = {link, _, _} <- Elts]};
+        {error, _} = Error -> Error
+    end.
 
 
 -spec parse(Text) -> Result
@@ -58,8 +62,32 @@ links(Text) when is_binary(Text) ->
                    Result :: {ok, [tagged_line()]} | {error, term()}.
 parse(Text) when is_binary(Text) ->
     Lines = split_lines(Text),
-    {Acc, Pref} = lists:foldl(fun parse_line/2, {[], none}, Lines),
-    {ok, lists:reverse(finish_pref(Pref, Acc))}.
+    case parse_lines(Lines, {[], none}) of
+        {ok, {Acc, Pref}} -> {ok, lists:reverse(finish_pref(Pref, Acc))};
+        {error, _} = Error -> Error
+    end.
+
+
+% fold parse_line/2 over the lines, stopping at the first line which
+% is not valid UTF-8
+-spec parse_lines(Lines, State) -> Result
+              when Lines  :: [binary()],
+                   State  :: state(),
+                   Result :: {ok, state()} | {error, invalid_utf8}.
+parse_lines([], State) ->
+    {ok, State};
+parse_lines([Line|Lines], State) ->
+    case valid_utf8(Line) of
+        true -> parse_lines(Lines, parse_line(Line, State));
+        false -> {error, invalid_utf8}
+    end.
+
+
+-spec valid_utf8(Line) -> Result
+              when Line   :: binary(),
+                   Result :: boolean().
+valid_utf8(Line) ->
+    is_binary(unicode:characters_to_binary(Line, utf8, utf8)).
 
 
 % an unterminated preformatted block is still emitted
