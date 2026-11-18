@@ -7,23 +7,10 @@
 %%% Created : 23 Dec 2023 by Martin Keegan <mk270@stove>
 %%%-------------------------------------------------------------------
 
-% transitional from v1.0.0 to v2.0.0:
-%
-% the only call we need to support is:
-%
-%   urls/1:
-%
-%   -spec urls(Body) -> Result
-%           when Body   :: binary(),
-%                Result :: {ok, [binary()]} | {error, term()}.
-%
-
 -module(gemini_text).
 
 % todo:
 %   docs
-%   tests for the other bits
-%   multiple blank lines
 
 -export([parse/1, links/1, urls/1]).
 
@@ -36,13 +23,16 @@
 -type state()       :: {[tagged_line()], pref_state()}.
 -type tagged_line() :: simple_line() | link_line() | pref_block() | blank.
 
+%%% API %%%
+
 -doc "Extract all the URLs in the links in the given Gemini page.".
 -spec urls(Text) -> Result
               when Text   :: binary(),
                    Result :: {ok, [binary()]} | {error, term()}.
+
 urls(Text) when is_binary(Text) ->
     case links(Text) of
-        {ok, Links} -> {ok, [URL || {link, URL, _} <- Links]};
+        {ok, Links}        -> {ok, [URL || {link, URL, _} <- Links]};
         {error, _} = Error -> Error
     end.
 
@@ -52,7 +42,7 @@ urls(Text) when is_binary(Text) ->
                    Result :: {ok, [link_line()]} | {error, term()}.
 links(Text) when is_binary(Text) ->
     case parse(Text) of
-        {ok, Elts} -> {ok, [L || L = {link, _, _} <- Elts]};
+        {ok, Elts}         -> {ok, [L || L = {link, _, _} <- Elts]};
         {error, _} = Error -> Error
     end.
 
@@ -63,10 +53,12 @@ links(Text) when is_binary(Text) ->
 parse(Text) when is_binary(Text) ->
     Lines = split_lines(Text),
     case parse_lines(Lines, {[], none}) of
-        {ok, {Acc, Pref}} -> {ok, lists:reverse(finish_pref(Pref, Acc))};
+        {ok, {Acc, Pref}}  -> {ok, lists:reverse(finish_pref(Pref, Acc))};
         {error, _} = Error -> Error
     end.
 
+
+%%% Internal %%%
 
 % fold parse_line/2 over the lines, stopping at the first line which
 % is not valid UTF-8
@@ -108,10 +100,10 @@ finish_pref(Pref, Acc) ->
                    Result :: state().
 parse_line(Line, {Acc, Pref}) ->
     case {pref_marker(Line), Pref} of
-        {false, none} -> {[tag(Line)|Acc], none};
+        {false, none}           -> {[tag(Line)|Acc], none};
         {false, {Alt, PrefAcc}} -> {Acc, {Alt, [Line|PrefAcc]}};
-        {true, none} -> {Acc, {alt_text(Line), []}};
-        {true, _} -> {[pref_block(Pref)|Acc], none}
+        {true, none}            -> {Acc, {alt_text(Line), []}};
+        {true, _}               -> {[pref_block(Pref)|Acc], none}
     end.
 
 
@@ -188,7 +180,7 @@ tag(Line) ->
 
 tag2(Line, [{Prefix, Tag}|T]) ->
     case prefix(Prefix, Line) of
-        true -> tag3(Line, Tag);
+        true  -> tag3(Line, Tag);
         false -> tag2(Line, T)
     end.
 
