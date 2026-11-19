@@ -20,7 +20,8 @@ the whole text. [`new_context/1`](`new_context/1`) takes options (see
 `t:option/0`).
 
 [`links/1`](`links/1`) and [`urls/1`](`urls/1`) are helpers which
-extract just the links, or just their URLs.
+extract just the links, or just their URLs. To read a page as a
+subscription feed, see `m:gemini_text_feed`.
 """.
 
 -author('martin@no.ucant.org').

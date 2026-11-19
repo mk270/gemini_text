@@ -27,6 +27,22 @@ Chunks can be any size and can end anywhere, even in the middle of a line.
 {ok,[]}
 ```
 
+## Subscription feeds
+
+`gemini_text_feed:feed/1` reads a page as a feed, following the Gemini
+subscription convention: the title is the first `#` heading, and each
+link whose label starts with a `YYYY-MM-DD` date is an entry. Entries
+are `#gemsub_entry{}` records (see `include/gemini_text.hrl`).
+
+```erlang
+1> rr("include/gemini_text.hrl").
+2> gemini_text_feed:feed(<<"# My log\r\n"
+2>     "=> a.gmi 2020-11-20 - First post\r\n">>).
+{ok,<<"My log">>,
+    [#gemsub_entry{url = <<"a.gmi">>,date = {2020,11,20},
+                   title = <<"First post">>}]}
+```
+
 ## API documentation
 
 <https://gemini-text.hexdocs.pm/api-reference.html>
